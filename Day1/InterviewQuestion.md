@@ -698,6 +698,230 @@ Thread switching is lightweight because it preserves the memory address space an
 
 ---
 
+## Topic 4: Numerical & Analytical Problems
+
+### Section A: CPU Scheduling Performance Metrics & Solved Problems
+
+CPU scheduling algorithms are evaluated using several key temporal metrics. Understanding the formulas and how to track processes in time is essential for OS interviews.
+
+#### Core Formulas:
+1. **Turnaround Time ($TAT$):** The total time taken from a process's arrival to its completion.
+   $$TAT = \text{Completion Time (CT)} - \text{Arrival Time (AT)}$$
+2. **Waiting Time ($WT$):** The total time a process spends waiting in the ready queue.
+   $$WT = TAT - \text{Burst Time (BT)}$$
+3. **Response Time ($RT$):** The time from a process's arrival to its first execution on the CPU.
+   $$RT = \text{First Scheduled Time} - \text{Arrival Time (AT)}$$
+4. **CPU Utilization:** The percentage of time the CPU is active.
+   $$\text{CPU Utilization} = \frac{\text{Total CPU Active Time}}{\text{Total Time}} \times 100\%$$
+5. **Throughput:** The rate of process completions.
+   $$\text{Throughput} = \frac{\text{Total Processes Completed}}{\text{Total Time Taken}}$$
+
+---
+
+#### Dataset for Problems 1-4:
+Assume the scheduler receives the following four processes:
+
+| Process ID | Arrival Time ($AT$) | Burst Time ($BT$) |
+| :--- | :--- | :--- |
+| **$P_1$** | $0\text{ ms}$ | $6\text{ ms}$ |
+| **$P_2$** | $1\text{ ms}$ | $4\text{ ms}$ |
+| **$P_3$** | $2\text{ ms}$ | $2\text{ ms}$ |
+| **$P_4$** | $3\text{ ms}$ | $3\text{ ms}$ |
+
+---
+
+#### Problem 1: First-Come-First-Serve (FCFS)
+**Algorithm Description:** Non-preemptive. Processes are scheduled strictly in order of their arrival.
+
+##### Gantt Chart:
+```text
++-----------------------+-------------------+---------+-------------+
+|          P1           |        P2         |   P3    |     P4      |
++-----------------------+-------------------+---------+-------------+
+0                       6                   10        12            15
+```
+
+##### Process Metrics Table:
+* **$P_1$:** Arrival = $0$. Completion = $6$. $TAT = 6 - 0 = 6$; $WT = 6 - 6 = 0$; $RT = 0 - 0 = 0$.
+* **$P_2$:** Arrival = $1$. Completion = $10$. $TAT = 10 - 1 = 9$; $WT = 9 - 4 = 5$; $RT = 6 - 1 = 5$.
+* **$P_3$:** Arrival = $2$. Completion = $12$. $TAT = 12 - 2 = 10$; $WT = 10 - 2 = 8$; $RT = 10 - 2 = 8$.
+* **$P_4$:** Arrival = $3$. Completion = $15$. $TAT = 15 - 3 = 12$; $WT = 12 - 3 = 9$; $RT = 12 - 3 = 9$.
+
+##### Average Calculations:
+* **Average Turnaround Time:** $\frac{6 + 9 + 10 + 12}{4} = \frac{37}{4} = 9.25\text{ ms}$
+* **Average Waiting Time:** $\frac{0 + 5 + 8 + 9}{4} = \frac{22}{4} = 5.50\text{ ms}$
+* **Average Response Time:** $\frac{0 + 5 + 8 + 9}{4} = \frac{22}{4} = 5.50\text{ ms}$
+
+---
+
+#### Problem 2: Non-preemptive Shortest Job First (SJF)
+**Algorithm Description:** Non-preemptive. When a process finishes, the scheduler selects the waiting process with the shortest burst time.
+
+##### Detailed Step-by-Step Schedule Trace:
+1. **$t=0$:** Only $P_1$ has arrived. Schedule $P_1$ to run from $t=0$ to $t=6$.
+2. **$t=6$:** $P_1$ finishes. Ready processes are $P_2$ (burst $4$), $P_3$ (burst $2$), and $P_4$ (burst $3$). Shortest is $P_3$. Run $P_3$ from $t=6$ to $t=8$.
+3. **$t=8$:** $P_3$ finishes. Ready processes are $P_2$ (burst $4$) and $P_4$ (burst $3$). Shortest is $P_4$. Run $P_4$ from $t=8$ to $t=11$.
+4. **$t=11$:** $P_4$ finishes. Ready process is $P_2$. Run $P_2$ from $t=11$ to $t=15$.
+
+##### Gantt Chart:
+```text
++-----------------------+---------+-------------+-------------------+
+|          P1           |   P3    |     P4      |        P2         |
++-----------------------+---------+-------------+-------------------+
+0                       6         8             11                  15
+```
+
+##### Process Metrics Table:
+* **$P_1$:** Arrival = $0$. Completion = $6$. $TAT = 6 - 0 = 6$; $WT = 6 - 6 = 0$; $RT = 0 - 0 = 0$.
+* **$P_2$:** Arrival = $1$. Completion = $15$. $TAT = 15 - 1 = 14$; $WT = 14 - 4 = 10$; $RT = 11 - 1 = 10$.
+* **$P_3$:** Arrival = $2$. Completion = $8$. $TAT = 8 - 2 = 6$; $WT = 6 - 2 = 4$; $RT = 6 - 2 = 4$.
+* **$P_4$:** Arrival = $3$. Completion = $11$. $TAT = 11 - 3 = 8$; $WT = 8 - 3 = 5$; $RT = 8 - 3 = 5$.
+
+##### Average Calculations:
+* **Average Turnaround Time:** $\frac{6 + 14 + 6 + 8}{4} = \frac{34}{4} = 8.50\text{ ms}$
+* **Average Waiting Time:** $\frac{0 + 10 + 4 + 5}{4} = \frac{19}{4} = 4.75\text{ ms}$
+
+---
+
+#### Problem 3: Shortest Remaining Time First (SRTF / Preemptive SJF)
+**Algorithm Description:** Preemptive. If a new process arrives with a shorter remaining burst time than the currently executing process, the CPU is preempted and allocated to the new process.
+
+##### Detailed Step-by-Step Schedule Trace:
+1. **$t=0$:** Start executing $P_1$.
+2. **$t=1$:** $P_2$ arrives with burst $4$. $P_1$ has $5\text{ ms}$ remaining. Since $P_2$'s burst ($4$) < $P_1$'s remaining burst ($5$), $P_1$ is preempted. Run $P_2$.
+3. **$t=2$:** $P_3$ arrives with burst $2$. $P_2$ has $3\text{ ms}$ remaining. Since $P_3$'s burst ($2$) < $P_2$'s remaining burst ($3$), $P_2$ is preempted. Run $P_3$.
+4. **$t=3$:** $P_4$ arrives with burst $3$. $P_3$ has $1\text{ ms}$ remaining. $P_3$ is shortest, so it continues.
+5. **$t=4$:** $P_3$ finishes. Ready processes: $P_1$ (rem $5$), $P_2$ (rem $3$), $P_4$ (rem $3$). There is a burst tie between $P_2$ and $P_4$. Since $P_2$ arrived first ($t=1$ vs. $t=3$), schedule $P_2$. Run $P_2$ from $t=4$ to $t=7$.
+6. **$t=7$:** $P_2$ finishes. Ready processes: $P_1$ (rem $5$) and $P_4$ (rem $3$). Shortest is $P_4$. Run $P_4$ from $t=7$ to $t=10$.
+7. **$t=10$:** $P_4$ finishes. Ready process is $P_1$ (rem $5$). Run $P_1$ from $t=10$ to $t=15$.
+
+##### Gantt Chart:
+```text
++----+----+---------+-------------+-------------+-------------------+
+| P1 | P2 |   P3    |     P2      |     P4      |        P1         |
++----+----+---------+-------------+-------------+-------------------+
+0    1    2         4             7             10                  15
+```
+
+##### Process Metrics Table:
+* **$P_1$:** Arrival = $0$. Completion = $15$. $TAT = 15 - 0 = 15$; $WT = 15 - 6 = 9$; $RT = 0 - 0 = 0$.
+* **$P_2$:** Arrival = $1$. Completion = $7$. $TAT = 7 - 1 = 6$; $WT = 6 - 4 = 2$; $RT = 1 - 1 = 0$.
+* **$P_3$:** Arrival = $2$. Completion = $4$. $TAT = 4 - 2 = 2$; $WT = 2 - 2 = 0$; $RT = 2 - 2 = 0$.
+* **$P_4$:** Arrival = $3$. Completion = $10$. $TAT = 10 - 3 = 7$; $WT = 7 - 3 = 4$; $RT = 7 - 3 = 4$.
+
+##### Average Calculations:
+* **Average Turnaround Time:** $\frac{15 + 6 + 2 + 7}{4} = \frac{30}{4} = 7.50\text{ ms}$
+* **Average Waiting Time:** $\frac{9 + 2 + 0 + 4}{4} = \frac{15}{4} = 3.75\text{ ms}$
+* **Average Response Time:** $\frac{0 + 0 + 0 + 4}{4} = \frac{4}{4} = 1.00\text{ ms}$
+
+---
+
+#### Problem 4: Round Robin (RR) - Time Quantum ($TQ$) = $2\text{ ms}$
+**Algorithm Description:** Preemptive. Each process gets a maximum of $TQ$ units of execution time. If not finished, it is placed at the back of the Ready Queue.
+
+##### Detailed Step-by-Step Ready Queue Trace:
+* **$t=0$:** $P_1$ arrives. Ready Queue = $[P_1]$. Run $P_1$ (remaining $4\text{ ms}$).
+* **$t=1$:** $P_2$ arrives. Ready Queue = $[P_2]$.
+* **$t=2$:** $P_3$ arrives. $P_1$ is preempted and appended after new arrivals. Ready Queue = $[P_2, P_3, P_1]$. Run $P_2$ (remaining $2\text{ ms}$).
+* **$t=3$:** $P_4$ arrives. Ready Queue = $[P_3, P_1, P_4]$.
+* **$t=4$:** $P_2$ is preempted and appended. Ready Queue = $[P_3, P_1, P_4, P_2]$. Run $P_3$ (remaining $0\text{ ms}$).
+* **$t=6$:** $P_3$ finishes. Ready Queue = $[P_1, P_4, P_2]$. Run $P_1$ (remaining $2\text{ ms}$).
+* **$t=8$:** $P_1$ is preempted and appended. Ready Queue = $[P_4, P_2, P_1]$. Run $P_4$ (remaining $1\text{ ms}$).
+* **$t=10$:** $P_4$ is preempted and appended. Ready Queue = $[P_2, P_1, P_4]$. Run $P_2$ (remaining $0\text{ ms}$).
+* **$t=12$:** $P_2$ finishes. Ready Queue = $[P_1, P_4]$. Run $P_1$ (remaining $0\text{ ms}$).
+* **$t=14$:** $P_1$ finishes. Ready Queue = $[P_4]$. Run $P_4$ (remaining $0\text{ ms}$).
+* **$t=15$:** $P_4$ finishes. Ready Queue = $\emptyset$.
+
+##### Gantt Chart:
+```text
++----+----+----+----+----+----+----+----+
+| P1 | P2 | P3 | P1 | P4 | P2 | P1 | P4 |
++----+----+----+----+----+----+----+----+
+0    2    4    6    8    10   12   14   15
+```
+
+##### Process Metrics Table:
+* **$P_1$:** Arrival = $0$. Completion = $14$. $TAT = 14 - 0 = 14$; $WT = 14 - 6 = 8$; $RT = 0 - 0 = 0$.
+* **$P_2$:** Arrival = $1$. Completion = $12$. $TAT = 12 - 1 = 11$; $WT = 11 - 4 = 7$; $RT = 2 - 1 = 1$.
+* **$P_3$:** Arrival = $2$. Completion = $6$. $TAT = 6 - 2 = 4$; $WT = 4 - 2 = 2$; $RT = 4 - 2 = 2$.
+* **$P_4$:** Arrival = $3$. Completion = $15$. $TAT = 15 - 3 = 12$; $WT = 12 - 3 = 9$; $RT = 8 - 3 = 5$.
+
+##### Average Calculations:
+* **Average Turnaround Time:** $\frac{14 + 11 + 4 + 12}{4} = \frac{41}{4} = 10.25\text{ ms}$
+* **Average Waiting Time:** $\frac{8 + 7 + 2 + 9}{4} = \frac{26}{4} = 6.50\text{ ms}$
+* **Average Response Time:** $\frac{0 + 1 + 2 + 5}{4} = \frac{8}{4} = 2.00\text{ ms}$
+
+---
+
+### Section B: Parallelism & Scalability Calculations (Amdahl's Law)
+
+Amdahl's Law is used to calculate the theoretical maximum speedup of an application when execution is scaled across multiple processing cores.
+
+#### Formula:
+$$S = \frac{1}{(1 - p) + \frac{p}{N}}$$
+
+where:
+- **$S$:** The total speedup factor.
+- **$p$:** The fraction of the program that can be executed in parallel ($0 \le p \le 1$).
+- **$(1 - p)$:** The sequential bottleneck fraction (cannot be parallelized).
+- **$N$:** The number of CPU processing cores/processors.
+
+---
+
+#### Problem 5: Parallel Speedup Limits
+**Question:** An application runs such that $60\%$ of its work can be executed in parallel across multiple threads, while the remaining $40\%$ is strictly sequential.
+1. What is the speedup factor if the program is run on a quad-core processor ($N = 4$)?
+2. What is the theoretical maximum speedup factor if we run this on an infinite number of processors ($N \rightarrow \infty$)?
+
+##### Step-by-Step Solution:
+
+**Part 1 (Quad-core):**
+1. Identify variables: $p = 0.60$, $1 - p = 0.40$, $N = 4$.
+2. Substitute into Amdahl's Law:
+   $$S = \frac{1}{0.40 + \frac{0.60}{4}}$$
+3. Calculate terms:
+   $$\frac{0.60}{4} = 0.15$$
+   $$S = \frac{1}{0.40 + 0.15} = \frac{1}{0.55} \approx 1.818$$
+4. **Answer:** The speedup factor is **$1.82\times$**.
+
+**Part 2 (Infinite cores):**
+1. Identify variables: $p = 0.60$, $1 - p = 0.40$, $N \rightarrow \infty$.
+2. As $N$ approaches infinity, the parallel term approaches zero:
+   $$\lim_{N \rightarrow \infty} \frac{p}{N} = 0$$
+3. Substitute:
+   $$S_{\max} = \frac{1}{1 - p} = \frac{1}{0.40} = 2.5$$
+4. **Answer:** The theoretical limit is **$2.5\times$**, regardless of how many CPU cores are added.
+
+---
+
+### Section C: Context Switch Overhead Calculations
+
+Context switching is not free; saving and restoring registers requires processor cycles.
+
+#### Formula:
+$$\text{CPU Efficiency} = \frac{T_{\text{execution}}}{T_{\text{execution}} + T_{\text{overhead}}} \times 100\%$$
+
+---
+
+#### Problem 6: Time Quantum vs. Overhead Efficiency
+**Question:** A round-robin multitasking system has a time quantum of $10\text{ ms}$. If each context switch takes $200\ \mu\text{s}$ (microseconds) of overhead:
+1. What is the CPU efficiency?
+2. What is the percentage of CPU execution time lost to context switching?
+
+##### Step-by-Step Solution:
+1. Align units: 
+   - $T_{\text{execution}} = 10\text{ ms} = 10,000\ \mu\text{s}$
+   - $T_{\text{overhead}} = 200\ \mu\text{s}$
+2. Calculate total cycle time:
+   $$T_{\text{total}} = T_{\text{execution}} + T_{\text{overhead}} = 10,000 + 200 = 10,200\ \mu\text{s}$$
+3. Calculate Efficiency:
+   $$\text{Efficiency} = \frac{10,000}{10,200} \times 100\% \approx 98.04\%$$
+4. Calculate Overhead Percentage:
+   $$\text{Overhead \%} = 100\% - 98.04\% = 1.96\% \quad \left(\text{or } \frac{200}{10,200} \times 100\% \approx 1.96\%\right)$$
+5. **Answer:** The CPU efficiency is **$98.04\%$**, and **$1.96\%$** of execution time is wasted on context switching.
+
+---
+
 ## End of File: Day 1 Mastery
 
 ### Key Takeaways
@@ -705,11 +929,13 @@ Thread switching is lightweight because it preserves the memory address space an
 2. OS Evolution (Batch -> Multiprogramming -> Multitasking) was driven strictly by the need to maximize CPU utilization and responsiveness.
 3. Multi-Tasking isolates; Multi-Threading shares.
 4. The speed of Thread Context Switching is derived directly from the preservation of the Memory Address Space and CPU Cache State.
+5. CPU scheduling utilizes temporal algorithms to minimize turnaround and waiting time, while context switches introduce hardware-level cycles of scheduling overhead.
 
 ### Most Important Interview Questions
 1. Differentiate Process Context Switching and Thread Context Switching.
 2. Explain how Multiprogramming increases CPU utilization.
 3. Why does Multithreading lack isolation and memory protection?
+4. How do FCFS, SJF, and Round Robin scheduling impact average waiting time?
 
 ### 20 Rapid Fire Questions & Answers
 
@@ -752,7 +978,8 @@ Thread switching is lightweight because it preserves the memory address space an
 - <input type="checkbox"> I can trace OS evolution from Single Process to RTOS.
 - <input type="checkbox"> I can clearly define Program, Process, and Thread.
 - <input type="checkbox"> I can recite the exact differences in Thread vs Process context switching (Memory Space, Cache State, Speed).
-- <input type="checkbox"> I have memorized the Rapid Fire answers and Top 10 mistakes.
+- <input type="checkbox"> I can calculate Turnaround Time, Waiting Time, and scheduling Gantt charts.
+- <input type="checkbox"> I can explain Amdahl's Law speedup limitations.
 
 ### One-Page Cheat Sheet
 - **OS:** System software. Hides complexity, acts as resource manager. Prevents resource exploitation.
@@ -764,3 +991,7 @@ Thread switching is lightweight because it preserves the memory address space an
 - **RTOS:** Computations within tight-time boundaries (ROBOTS).
 - **Process:** Program in RAM. Isolated. Context switch includes memory space switch, cache flush. Slow.
 - **Thread:** Path of execution in process. Light-weight. Shared memory. Context switch includes only PC/Registers/Stack, preserves cache. Fast.
+- **CPU Scheduling:** Gantt charts map executions. $TAT = CT - AT$; $WT = TAT - BT$. FCFS (FIFO arrival), SJF (shortest burst), RR (preemptive slices).
+- **Amdahl's Law:** Parallel speedup limited by sequential bottleneck: $S = 1 / ((1-p) + p/N)$.
+- **Context Switch efficiency:** $\text{Efficiency} = T_{\text{exec}} / (T_{\text{exec}} + T_{\text{overhead}})$.
+
