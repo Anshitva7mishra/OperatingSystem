@@ -703,17 +703,17 @@ flowchart LR
 #### Message Passing Architecture
 ```mermaid
 flowchart LR
-    subgraph UserSpaceA["User Space (Process A - Ring 3)"]
+    subgraph UserSpaceA["User Space - Process A - Ring 3"]
         MemA["Process A Memory"]
     end
-    subgraph KernelSpace["Kernel Space (Ring 0)"]
+    subgraph KernelSpace["Kernel Space - Ring 0"]
         KernelBuf["Kernel Buffer"]
     end
-    subgraph UserSpaceB["User Space (Process B - Ring 3)"]
+    subgraph UserSpaceB["User Space - Process B - Ring 3"]
         MemB["Process B Memory"]
     end
-    MemA -->|1. Copy 1 (Write Syscall)| KernelBuf
-    KernelBuf -->|2. Copy 2 (Read Syscall)| MemB
+    MemA -->|1. Copy 1 - Write Syscall| KernelBuf
+    KernelBuf -->|2. Copy 2 - Read Syscall| MemB
 ```
 
 
@@ -1444,20 +1444,14 @@ Its signature is `int kill(pid_t pid, int sig);`.
 3. **Signal Delivery:** The kernel marks the signal in the target process's descriptor flag field. The signal is not delivered instantly; it is processed when the target process transitions from Kernel Mode back to User Mode, or when it wakes up from a blocked state.
 
 ### Internal Working
-```
-Process A invokes kill(PID_B, SIGKILL)
-                      |
-                      v
-      Kernel Mode (Ring 0 Permission Check)
-                      |
-                      +---> Writes SIGKILL into Process B's pending signal set
-                      |
-          Interrupts Process B if sleeping
-                      |
-    When Process B is scheduled next:
-    Kernel checks B's pending signals
-                      |
-    Detects SIGKILL -> Terminates B, releases memory, marks B as zombie
+
+```mermaid
+flowchart TD
+    AppA["Process A invokes kill - PID_B, SIGKILL"] --> KernelMode["Kernel Mode - Ring 0 Permission Check"]
+    KernelMode --> WriteSet["Writes SIGKILL into Process B pending signal set"]
+    WriteSet --> InterruptSleep["Interrupts Process B if sleeping"]
+    InterruptSleep --> B_Scheduled["When Process B is scheduled next:\nKernel checks B pending signals"]
+    B_Scheduled --> TerminateB["Detects SIGKILL:\nTerminates B, releases memory, marks B as zombie"]
 ```
 
 ### Real Life Analogy
@@ -1563,22 +1557,30 @@ To handle communications with peripheral devices (keyboards, disks, network inte
 
 ### Internal Working
 
-```
-Programmed I/O:
-[ CPU ] <--- Loop Poll Status ---> [ Device Controller ]
-[ CPU ] <--- Copy Data Byte ----> [ Device Controller ]
+```mermaid
+flowchart TD
+    subgraph ProgrammedIO["Programmed I/O - Polling"]
+        direction TB
+        CPU_Poll["CPU"] -->|1. Write Command| Dev_Poll["Device Controller"]
+        CPU_Poll <-->|2. Loop Poll Status Register| Dev_Poll
+        CPU_Poll <--|3. Copy Data Byte| Dev_Poll
+    end
 
-Interrupt-Driven I/O:
-[ CPU ] ----> 1. Start I/O ----> [ Device Controller ]
-[ CPU ] ----> 2. Run other apps (Unblocked)
-[ CPU ] <--- 3. IRQ Interrupt <--- [ Device Controller ]
-[ CPU ] ----> 4. Run ISR (Copy Byte) ---> [ RAM ]
+    subgraph InterruptIO["Interrupt-Driven I/O"]
+        direction TB
+        CPU_Int["CPU"] -->|1. Start I/O Command| Dev_Int["Device Controller"]
+        CPU_Int -->|2. Run other applications| CPU_Int
+        Dev_Int -->|3. Raise IRQ Interrupt| CPU_Int
+        CPU_Int -->|4. Execute ISR: Copy Data Byte| RAM_Int["RAM"]
+    end
 
-Direct Memory Access (DMA):
-[ CPU ] ----> 1. Setup DMAC (RAM addr, size) ----> [ DMAC ]
-[ CPU ] ----> 2. Run other apps
-[ DMAC ] <== 3. Direct Block Data Transfer ===> [ RAM ] (No CPU involvement)
-[ DMAC ] ---> 4. Interrupt (Block Done) ---> [ CPU ]
+    subgraph DirectMemory["Direct Memory Access - DMA"]
+        direction TB
+        CPU_DMA["CPU"] -->|1. Program DMAC - RAM Address and Size| DMAC["DMA Controller"]
+        CPU_DMA -->|2. Run other applications| CPU_DMA
+        DMAC <==|3. Direct Block Data Transfer| RAM_DMA["RAM"]
+        DMAC -->|4. Raise Interrupt: Block Done| CPU_DMA
+    end
 ```
 
 
@@ -1714,14 +1716,29 @@ int main() {
 4. **Answer:** The string `"OS"` will be printed **8 times**.
 
 ##### Execution Tree:
-```
-           P0 (Original Parent)
-          /    \ (Fork 1)
-        P0      P1
-       /  \    /  \ (Fork 2)
-      P0   P2 P1   P3
-     / \  / \ / \  / \ (Fork 3)
-    8 active leaf processes (P0, P4, P2, P5, P1, P6, P7, P8)
+
+```mermaid
+graph TD
+    P0_1["P0 - Original Parent"] -->|Fork 1| P0_2["P0"]
+    P0_1 -->|Fork 1| P1_2["P1"]
+    
+    P0_2 -->|Fork 2| P0_3["P0"]
+    P0_2 -->|Fork 2| P2_3["P2"]
+    
+    P1_2 -->|Fork 2| P1_3["P1"]
+    P1_2 -->|Fork 2| P3_3["P3"]
+    
+    P0_3 -->|Fork 3| P0_4["P0"]
+    P0_3 -->|Fork 3| P4_4["P4"]
+    
+    P2_3 -->|Fork 3| P2_4["P2"]
+    P2_3 -->|Fork 3| P5_4["P5"]
+    
+    P1_3 -->|Fork 3| P1_4["P1"]
+    P1_3 -->|Fork 3| P6_4["P6"]
+    
+    P3_3 -->|Fork 3| P3_4["P7"]
+    P3_3 -->|Fork 3| P7_4["P8"]
 ```
 
 ---
@@ -1770,14 +1787,16 @@ Let's trace:
 4. **Answer:** **3 processes** are created in total.
 
 ##### Execution Tree Trace:
-```
-                      P_root
-                      /    \  (First Fork)
-        P_root (Left = true)   P_child1 (Left = 0 / false)
-              |                       |
-        (Runs Second Fork)       (Short-circuits)
-            /    \                    |
-      P_root   P_child2             Halts
+
+```mermaid
+graph TD
+    PRoot["P_root"] -->|First Fork| PRoot_Left["P_root\nLeft = true"]
+    PRoot -->|First Fork| PChild1["P_child1\nLeft = 0 / false"]
+    
+    PRoot_Left -->|Runs Second Fork| PRoot_Final["P_root"]
+    PRoot_Left -->|Runs Second Fork| PChild2["P_child2"]
+    
+    PChild1 -->|Short-circuits| Halts["Halts"]
 ```
 
 ---
