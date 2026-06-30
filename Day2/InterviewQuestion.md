@@ -411,9 +411,11 @@ A mode transition switches privilege levels (Ring 3 to Ring 0) via software inte
 3. System calls are safe gatekeepers that transition the CPU from Ring 3 to Ring 0 using fast hardware routines (`SYSCALL` / `SYSRET`).
 
 ### Revision Checklist
-- [ ] Differentiate between User Mode and Kernel Mode.
-- [ ] Trace a system call from user-space wrapper to kernel execution.
-- [ ] Understand privilege levels (Ring 0 vs. Ring 3) and page table isolation.
+
+*   **Differentiate** between User Mode and Kernel Mode.
+*   **Trace** a system call from user-space wrapper to kernel execution.
+*   **Understand** privilege levels (Ring 0 vs. Ring 3) and page table isolation.
+
 
 ---
 
@@ -682,16 +684,37 @@ To prevent security leaks, the OS isolates process memory. For processes to coop
    - **Synchronization:** Automatically managed by the kernel. If the buffer is empty, the kernel blocks Process B until Process A writes data.
 
 ### Internal Working
-```
-Shared Memory Architecture:
-[ Process A Virtual Mem ] ---\
-                              +--> [ Shared Physical RAM Page ]
-[ Process B Virtual Mem ] ---/    (Fastest, Requires Locks)
 
-Message Passing Architecture:
-[ Process A Memory ] --> (Copy 1) --> [ Kernel Buffer ] --> (Copy 2) --> [ Process B Memory ]
-  (Ring 3)                              (Ring 0)                           (Ring 3)
+#### Shared Memory Architecture
+```mermaid
+flowchart LR
+    subgraph UserSpace["User Space"]
+        ProcessA["Process A\nVirtual Memory"]
+        ProcessB["Process B\nVirtual Memory"]
+    end
+    subgraph PhysicalRAM["Physical RAM"]
+        SharedPage["Shared Physical RAM Page\n(Fastest, Requires Locks)"]
+    end
+    ProcessA -->|Direct Read/Write| SharedPage
+    ProcessB -->|Direct Read/Write| SharedPage
 ```
+
+#### Message Passing Architecture
+```mermaid
+flowchart LR
+    subgraph UserSpaceA["User Space (Process A - Ring 3)"]
+        MemA["Process A Memory"]
+    end
+    subgraph KernelSpace["Kernel Space (Ring 0)"]
+        KernelBuf["Kernel Buffer"]
+    end
+    subgraph UserSpaceB["User Space (Process B - Ring 3)"]
+        MemB["Process B Memory"]
+    end
+    MemA -->|1. Copy 1 (Write Syscall)| KernelBuf
+    KernelBuf -->|2. Copy 2 (Read Syscall)| MemB
+```
+
 
 ### Real Life Analogy
 - **Shared Memory:** Two students working on the same poster. They sit at the same table (Shared Page) and draw directly on it. This is fast, but if they don't coordinate, they might write over each other's work (race condition).
@@ -762,9 +785,11 @@ Shared Memory maps physical pages to both processes, allowing fast read/writes b
 3. IPC is necessary for isolated processes, using either shared memory (fast, complex) or message passing (slower, safe).
 
 ### Revision Checklist
-- [ ] List the differences between Monolithic, Micro, and Hybrid kernels.
-- [ ] Explain why microkernels have higher context-switching overhead.
-- [ ] Contrast Shared Memory and Message Passing IPC.
+
+*   **List** the differences between Monolithic, Micro, and Hybrid kernels.
+*   **Explain** why microkernels have higher context-switching overhead.
+*   **Contrast** Shared Memory and Message Passing IPC.
+
 
 ---
 
@@ -947,13 +972,19 @@ BIOS and UEFI represent two generations of system firmware:
 - **POST (Power-On Self-Test):** A diagnostic check run by the firmware to verify CPU, RAM, and hardware health before booting.
 
 ### Internal Working
-```
-Legacy BIOS Boot Flow:
-[ Power On ] -> [ BIOS (16-bit) ] -> [ POST ] -> [ Read MBR Sector 0 ] -> [ Exec Boot Loader ]
 
-Modern UEFI Boot Flow:
-[ Power On ] -> [ UEFI (64-bit) ] -> [ POST ] -> [ Access ESP (FAT32) ] -> [ Exec BOOTX64.EFI ]
+#### Legacy BIOS Boot Flow
+```mermaid
+flowchart LR
+    PowerOn1["Power On"] --> BIOS["BIOS (16-bit)"] --> POST1["POST"] --> MBR["Read MBR Sector 0"] --> BootLoader1["Exec Boot Loader"]
 ```
+
+#### Modern UEFI Boot Flow
+```mermaid
+flowchart LR
+    PowerOn2["Power On"] --> UEFI["UEFI (64-bit)"] --> POST2["POST"] --> ESP["Access ESP (FAT32)"] --> BootLoader2["Exec BOOTX64.EFI"]
+```
+
 
 ### Real Life Analogy
 - **BIOS and MBR:** An old office filing cabinet (MBR) limited to 4 folders (partitions). The office manager (BIOS) only reads typed paper slips, cannot handle large files, and has no lock on the drawers.
@@ -1104,9 +1135,10 @@ A boot loader (GRUB, Bootmgr) is a program that reads partition filesystems, cop
 3. The CMOS battery keeps volatile settings and system time active when the machine is powered down.
 
 ### Revision Checklist
-- [ ] List the steps of the computer boot sequence.
-- [ ] Contrast BIOS and UEFI architectures.
-- [ ] Understand the differences between MBR and GPT partition tables.
+
+*   **List** the steps of the computer boot sequence.
+*   **Contrast** BIOS and UEFI architectures.
+*   **Understand** the differences between MBR and GPT partition tables.
 
 ---
 
@@ -1823,8 +1855,10 @@ Let's trace:
 ## End of File: Day 2 Mastery
 
 ### Revision Checklist
-- [ ] Understand the mechanics of mode transitions from Ring 3 to Ring 0.
-- [ ] Diagram Monolithic, Microkernel, and Hybrid architectures.
-- [ ] List the steps of the computer boot sequence.
-- [ ] Differentiate between Spooling, Buffering, and Caching.
-- [ ] Solve process tree creation counts for conditional `fork()` sequences.
+
+*   **Understand** the mechanics of mode transitions from Ring 3 to Ring 0.
+*   **Diagram** Monolithic, Microkernel, and Hybrid architectures.
+*   **List** the steps of the computer boot sequence.
+*   **Differentiate** between Spooling, Buffering, and Caching.
+*   **Solve** process tree creation counts for conditional `fork()` sequences.
+
