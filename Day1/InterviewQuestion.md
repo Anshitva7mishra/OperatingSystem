@@ -647,8 +647,27 @@ The OS assigns CPU time slices to threads based on their priority.
 Process context switching is slow because it involves switching the memory address space and flushing the CPU cache. Thread context switching is fast because it only involves swapping the Program Counter, registers, and stack, leaving the memory address space unchanged and the CPU cache preserved.
 
 ##### Detailed Answer
-When the OS switches from Process A to Process B, it must save Process A's state. Crucially, it must update the Memory Management Unit (MMU) to point to Process B's page tables. This switching of the memory address space causes the Translation Lookaside Buffer (TLB) and CPU caches to be flushed, resulting in a massive performance penalty (cache misses).
-When switching from Thread 1 to Thread 2 within the *same* process, the memory address space is identical. The OS does not flush the cache or TLB. It merely saves the CPU registers and stack pointer. This preserved cache state makes thread switching exceptionally fast.
+A process context switch and a thread context switch have vastly different overheads due to how memory address spaces are managed:
+
+*   **Process Context Switch (Heavyweight):**
+    *   **Context Saving:** The OS saves Process A's registers, Program Counter (`%rip`), and Stack Pointer (`%rsp`) into its **Process Control Block (PCB)**.
+    
+    *   **Address Space Swap:** The OS must swap the active virtual memory page tables. On x86 architectures, this is done by writing the physical address of Process B's page directory root into the **`%cr3` control register**.
+    
+    *   **TLB Invalidation:** Modifying the `%cr3` register causes the CPU hardware to automatically **flush the Translation Lookaside Buffer (TLB)** cache.
+    
+    *   **Performance Hit:** Because the TLB is cleared, subsequent memory reads/writes by Process B trigger slow page table walks in RAM (**TLB misses**). Additionally, the L1/L2 CPU caches must load Process B's instructions and data from scratch, resulting in cache coldness.
+
+*   **Thread Context Switch (Lightweight):**
+    *   **Shared Address Space:** Threads belonging to the same process share the identical virtual memory mappings. The page directory root in the **`%cr3` register remains unchanged**.
+    
+    *   **No TLB Flush:** Because the mappings are unchanged, the **TLB is NOT flushed**, and the L1/L2 CPU caches remain hot and populated with relevant data.
+    
+    *   **State Saved:** The kernel only saves and restores the thread's registers, Program Counter (`%rip`), and Stack Pointer (`%rsp`) into its **Thread Control Block (TCB)**.
+    
+    *   **Performance Benefit:** Bypassing virtual address space reallocation makes thread switching orders of magnitude faster.
+
+
 
 ##### Real Life Analogy
 - **Process Switch:** Moving to a new office building. You have to pack your desk, drive, unpack, and set up a new environment. (Slow)
