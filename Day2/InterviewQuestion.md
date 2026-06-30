@@ -1559,27 +1559,27 @@ To handle communications with peripheral devices (keyboards, disks, network inte
 
 ```mermaid
 flowchart TD
-    subgraph ProgrammedIO["Programmed I/O - Polling"]
+    subgraph ProgrammedIO["Programmed I/O Polling"]
         direction TB
         CPU_Poll["CPU"] -->|1. Write Command| Dev_Poll["Device Controller"]
         CPU_Poll <-->|2. Loop Poll Status Register| Dev_Poll
-        CPU_Poll <--|3. Copy Data Byte| Dev_Poll
+        Dev_Poll -->|3. Copy Data Byte| CPU_Poll
     end
 
-    subgraph InterruptIO["Interrupt-Driven I/O"]
+    subgraph InterruptIO["Interrupt Driven I/O"]
         direction TB
         CPU_Int["CPU"] -->|1. Start I/O Command| Dev_Int["Device Controller"]
         CPU_Int -->|2. Run other applications| CPU_Int
         Dev_Int -->|3. Raise IRQ Interrupt| CPU_Int
-        CPU_Int -->|4. Execute ISR: Copy Data Byte| RAM_Int["RAM"]
+        CPU_Int -->|4. Execute ISR - Copy Data Byte| RAM_Int["RAM"]
     end
 
-    subgraph DirectMemory["Direct Memory Access - DMA"]
+    subgraph DirectMemory["Direct Memory Access DMA"]
         direction TB
         CPU_DMA["CPU"] -->|1. Program DMAC - RAM Address and Size| DMAC["DMA Controller"]
         CPU_DMA -->|2. Run other applications| CPU_DMA
-        DMAC <==|3. Direct Block Data Transfer| RAM_DMA["RAM"]
-        DMAC -->|4. Raise Interrupt: Block Done| CPU_DMA
+        DMAC -->|3. Direct Block Data Transfer| RAM_DMA["RAM"]
+        DMAC -->|4. Raise Interrupt - Block Done| CPU_DMA
     end
 ```
 
