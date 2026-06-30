@@ -310,30 +310,31 @@ The transition occurs through three main entry points:
 5. **Return Transition:** The kernel restores the saved registers from the kernel stack and calls the `SYSRETQ` instruction. The CPU hardware restores `RIP` from `RCX`, `RFLAGS` from `R11`, drops the CPL back to Ring 3, and switches back to the User Stack.
 
 ### Internal Working
+
+```mermaid
+flowchart TD
+    subgraph UserSpace["User Space (CPL = 3)"]
+        App["Executing App Code\n(User Stack RSP)"]
+    end
+
+    subgraph KernelSpace["Kernel Space (CPL = 0)"]
+        SyscallH["Kernel Entry Code\n- Pushes GPRs to Kernel Stack\n- Dispatches System Call"]
+        KernelRun["Kernel Mode Execution"]
+    end
+
+    App -->|1. SYSCALL Instruction| HW_Elevate
+    
+    subgraph HW["Hardware Transition (Atomic)"]
+        HW_Elevate["2. Hardware Elevation:\n- Save RIP -> RCX, RFLAGS -> R11\n- Switch CPL 3 -> 0\n- Swap RSP_user -> RSP_kernel (via TSS)\n- Jump to IA32_LSTAR MSR"]
+        HW_Drop["4. Hardware Return:\n- Restore RIP from RCX, RFLAGS from R11\n- Drop CPL 0 -> 3\n- Swap RSP_kernel -> RSP_user"]
+    end
+
+    HW_Elevate --> SyscallH
+    SyscallH --> KernelRun
+    KernelRun -->|3. SYSRET Instruction| HW_Drop
+    HW_Drop --> App
 ```
-   User Mode (CPL = 3)                    Kernel Mode (CPL = 0)
-+-----------------------+              +---------------------------+
-| Executing App Code    |              |                           |
-| User Stack (RSP_user) |              |                           |
-+-----------+-----------+              +-------------+-------------+
-            |                                        ^
-      [ SYSCALL ]                              [ SYSRET ]
-            |                                        |
-            v                                        |
-  +---------+----------------------------------------+---------+
-  |  1. Save RIP -> RCX, RFLAGS -> R11                         |
-  |  2. Switch CPL 3 -> 0                                      |
-  |  3. Switch RSP_user -> RSP_kernel (from TSS)               |
-  |  4. Jump to entry point in IA32_LSTAR MSR                  |
-  +---------+--------------------------------------------------+
-            |
-            v
-+-----------+-----------+
-| Kernel Entry Code     |
-| Pushes GPRs onto stack|
-| Dispatches Sys Call   |
-+-----------------------+
-```
+
 
 ### Real Life Analogy
 Consider a citizen (User Space App) visiting a high-security embassy (Kernel Space). The citizen cannot open the security doors. Instead, they walk up to a bulletproof window (System Call boundary). The citizen hands a passport request (syscall number and arguments) to the clerk through a secure slot (Registers). The clerk verifies it, pushes a button (SYSCALL), enters the vault (Ring 0), retrieves the passport, returns to the window, and slides the passport back to the citizen (SYSRET).
