@@ -211,18 +211,17 @@ Memory isolation is enforced by cooperation between CPU execution registers and 
 3.  **Hardware Trap Enforcement:** When a process executes a load/store instruction, the MMU checks the CPL. If a Ring 3 instruction accesses a page where `U/S = 0`, the MMU blocks the memory bus, triggers a Page Fault Exception (`#PF`), elevates privilege to Ring 0, and jumps to the kernel's page fault handler to terminate the offending process (Segmentation Fault).
 
 ### Internal Working
-```
-Logical Virtual Address ---> MMU checks Page Table ---> [ U/S bit == 0? ]
-                                                               |
-                                        +----------------------+----------------------+
-                                        | Yes                                         | No
-                                [ Current Privilege Level ]                    Access Allowed
-                                (Stored in lower 2 bits of %cs)
-                                        |
-                    +-------------------+-------------------+
-                    | CPL == 3 (User)                       | CPL == 0 (Kernel)
-            Trigger Hardware Trap (#PF)                Access Allowed
-            Kernel terminates process
+```mermaid
+flowchart TD
+    Addr["Logical Virtual Address"] --> MMU["MMU checks Page Table"]
+    MMU --> Dec1{"U/S bit == 0?"}
+    
+    Dec1 -->|Yes| PrivilegeCheck["Check Current Privilege Level<br>(Stored in lower 2 bits of %cs)"]
+    Dec1 -->|No| AccessAllowed["Access Allowed"]
+    
+    PrivilegeCheck --> Dec2{"CPL?"}
+    Dec2 -->|3 (User)| Trap["Trigger Hardware Trap (#PF)<br>Kernel terminates process"]
+    Dec2 -->|0 (Kernel)| AccessAllowed
 ```
 The page table structures (Page Directory Entries, Page Table Entries) are themselves stored in kernel space. A user application cannot change its own page mappings because the register pointing to the base of the page table (the `CR3` register on x86) can only be written to using the `MOV CR3, reg` instruction, which is a privileged instruction that will throw a `#GP` fault if executed in Ring 3.
 
