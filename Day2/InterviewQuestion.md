@@ -1,7 +1,46 @@
-# Day 2: Components of OS, Kernels, System Calls, and the Boot Process - Ultimate Interview Guide
+# Day 2: Components of OS, Kernels, System Calls, and the Boot Process — The Ultimate Interview Encyclopedia
 
 > **NOTE:**
-> Welcome to Day 2 of the ultimate Operating Systems interview preparation guide. This document covers kernel architectures, mode switching, the boot sequence, process control system calls, and I/O management. Review these concepts, architectural diagrams, and solved numerical problems to ace system-level questions in high-performance engineering interviews.
+> Welcome to Day 2 of the ultimate Computer Science Interview Encyclopedia. This document covers OS kernel architectures, CPU privilege rings, mode transitions, the boot process, system calls, process control, and I/O management — from fundamentals to production-grade engineering. Designed to prepare you for FAANG, SRE, DevOps, and backend engineering interviews.
+
+---
+
+## Table of Contents
+
+1. [Learning Roadmap — Why These Topics Matter](#learning-roadmap)
+2. [OS Components, User Space vs Kernel Space, Mode Transition](#topic1)
+3. [Kernel Architectures — Monolithic, Microkernel, Hybrid, Exokernel](#topic2)
+4. [The Boot Process — POST to Shell](#topic3)
+5. [System Calls — Complete Reference](#topic4)
+6. [I/O Management — Programmed, Interrupt-Driven, DMA](#topic5)
+7. [Process Creation — fork, exec, Copy-on-Write](#topic6)
+8. [Kernel Architecture Master Comparison Table](#kernel-table)
+9. [Linux Syscall Category Reference](#syscall-ref)
+10. [I/O Scheduler Comparison](#io-sched)
+11. [FAANG-Level Interview Q&A](#faang-qa)
+12. [Reinforcement — Rapid Fire & Checklist](#reinforcement)
+
+---
+
+## Section 0: Learning Roadmap — Why These Topics Matter {#learning-roadmap}
+
+### Where Day 2 Topics Appear in Interviews
+
+| Role | Day 2 Topics Tested |
+| :--- | :--- |
+| **Backend / SDE** | System calls, file descriptors, fork/exec, copy-on-write |
+| **SRE / Platform** | Boot sequence, kernel panics, dmesg, OOM Killer, /proc |
+| **DevOps** | systemd, service management, boot troubleshooting |
+| **Security** | CPU privilege rings, Meltdown/Spectre, KPTI, privilege escalation |
+| **Database Engineering** | Direct I/O (O_DIRECT), mmap, huge pages, DMA, I/O schedulers |
+| **Cloud / Virtualization** | Hypervisor rings (-1), UEFI, VMX root mode, container isolation |
+
+### Key Mental Models for Day 2
+
+1. **The CPU is always in a privilege level** — Ring 3 (user) or Ring 0 (kernel). Mode transitions have overhead.
+2. **The kernel is interrupt-driven** — it doesn't run constantly; it's invoked by traps, exceptions, and hardware interrupts.
+3. **System calls are the only legal boundary** — user applications cannot touch hardware directly; they must cross the kernel boundary via the syscall interface.
+4. **The boot sequence is a privilege escalation chain** — firmware → bootloader → kernel → init → userspace, each level handing off control to the next.
 
 ---
 
@@ -1882,3 +1921,503 @@ Let's trace:
 *   **Differentiate** between Spooling, Buffering, and Caching.
 *   **Solve** process tree creation counts for conditional `fork()` sequences.
 
+---
+
+## Section A: Kernel Architecture Master Comparison Table {#kernel-table}
+
+> **IMPORTANT:**
+> This is one of the most frequently asked comparison topics in OS interviews at FAANG and top product companies.
+
+### Kernel Architecture Designs
+
+```mermaid
+flowchart TD
+    subgraph Monolithic["Monolithic Kernel (Linux, Unix)"]
+        M_FS["File System"] --- M_Net["Network Stack"]
+        M_Net --- M_Proc["Process Scheduler"]
+        M_Proc --- M_MM["Memory Manager"]
+        M_MM --- M_Dev["Device Drivers"]
+        note1["All services run in Ring 0<br>Single large binary"]
+    end
+
+    subgraph Micro["Microkernel (QNX, Mach, MINIX 3)"]
+        MK_Core["Tiny Kernel Core<br>(IPC, Scheduling, MM only)"] 
+        MK_FS2["File System Server<br>(User Space)"] 
+        MK_Net2["Network Server<br>(User Space)"]
+        MK_Dev2["Driver Servers<br>(User Space)"]
+        MK_Core <-->|"IPC Messages"| MK_FS2
+        MK_Core <-->|"IPC Messages"| MK_Net2
+        MK_Core <-->|"IPC Messages"| MK_Dev2
+    end
+
+    subgraph Hybrid["Hybrid Kernel (Windows NT, macOS XNU)"]
+        HK_Core2["Kernel Core<br>(Ring 0: Scheduler, MM, IPC)"]
+        HK_Dev3["Drivers (Ring 0)"] 
+        HK_Srv["Servers (User Space: GUI, Network)"]
+        HK_Core2 --- HK_Dev3
+        HK_Core2 <-->|"Message Passing"| HK_Srv
+    end
+```
+
+### Master Comparison Table
+
+| Feature | **Monolithic** | **Microkernel** | **Hybrid** | **Exokernel** | **Unikernel** |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Core Idea** | All OS services in kernel space | Minimal kernel; most services in user space | Mix of both | Expose raw hardware; libraries do OS functions | Single-purpose kernel fused with one app |
+| **Kernel Size** | Very large | Very small | Medium | Tiny | Tiny |
+| **Performance** | Highest (direct calls) | Lower (IPC overhead) | Good | Highest possible | Very high |
+| **Stability** | Driver bug = kernel panic | Driver crash = isolated to user server | Mixed | N/A | High (limited attack surface) |
+| **Security** | Lower (large Ring 0 surface) | Higher (minimal Ring 0) | Medium | Application controls everything | Very high (no extra services) |
+| **Portability** | Harder (hardware-specific code in kernel) | Easier (kernel is minimal) | Medium | Hard | Hard |
+| **IPC Overhead** | None (direct function calls) | High (message passing cross-boundary) | Medium | Minimal | None |
+| **Examples** | **Linux**, Unix, FreeBSD | **QNX**, Mach, MINIX 3, seL4 | **Windows NT**, **macOS (XNU)** | MIT Exokernel | MirageOS, Unikraft |
+| **Used In** | Servers, cloud, embedded | Automotive (QNX), safety-critical | Desktop OS, gaming consoles | Research | Cloud functions, IoT |
+
+### Why Linux is Called Monolithic (But with Modules)
+
+Linux is a monolithic kernel, but it supports **Loadable Kernel Modules (LKMs)** — device drivers and filesystem modules that can be dynamically inserted (`insmod`/`modprobe`) and removed (`rmmod`) at runtime without rebooting. LKMs run at **Ring 0 with full privileges**, so a buggy LKM can still cause a kernel panic. This is a pragmatic compromise: the clean module interface gives the appearance of modularity, but the security boundary of a true microkernel is absent.
+
+### Windows NT Hybrid Design
+
+Windows NT (the kernel behind all modern Windows) places the HAL (Hardware Abstraction Layer), Executive (Memory Manager, I/O Manager, Process Manager), and device drivers in Ring 0. Win32 subsystem servers (csrss.exe) run in Ring 3 as user-mode processes, communicating via the NT Local Procedure Call (ALPC) IPC mechanism — giving it microkernel characteristics for subsystem isolation.
+
+### macOS XNU Hybrid Design
+
+macOS XNU ("X is Not Unix") is a hybrid kernel combining:
+- **Mach** microkernel core (IPC, virtual memory, scheduling).
+- **BSD** subsystem (POSIX APIs, networking, file systems) — runs inside the kernel for performance, not in user space as true microkernel design would dictate.
+- **I/O Kit** (C++ driver framework in Ring 0).
+
+---
+
+## Section B: Linux Syscall Category Reference {#syscall-ref}
+
+### What is a System Call?
+
+A system call is the **programmatic interface** through which user-space applications request services from the kernel. The Linux kernel has ~350+ distinct system calls. They are organized into functional categories.
+
+### Syscall Number Convention (x86-64)
+
+When a program calls a function like `open()` from glibc:
+1. glibc writes the syscall number into register `rax` (e.g., `open` = syscall #2).
+2. Arguments go into `rdi`, `rsi`, `rdx`, `r10`, `r8`, `r9`.
+3. The `SYSCALL` instruction triggers the mode transition.
+4. The kernel dispatches via `sys_call_table[rax]`.
+5. Return value is placed in `rax` upon `SYSRET`.
+
+### System Call Categories
+
+| Category | System Calls | Description |
+| :--- | :--- | :--- |
+| **Process Control** | `fork`, `exec`, `exit`, `wait`, `getpid`, `getppid`, `clone`, `kill` | Create, terminate, wait for processes. `clone()` is the low-level call behind threads. |
+| **File Management** | `open`, `close`, `read`, `write`, `seek`, `stat`, `lstat`, `fstat`, `truncate`, `rename`, `unlink` | Open/read/write/close files. |
+| **Directory** | `mkdir`, `rmdir`, `opendir`, `readdir`, `chdir`, `getcwd` | Navigate and manage directory entries. |
+| **Memory** | `brk`, `sbrk`, `mmap`, `munmap`, `mprotect`, `mlock`, `msync` | Manage process virtual memory. `malloc()` internally uses `brk()`/`mmap()`. |
+| **IPC** | `pipe`, `msgget`, `msgsnd`, `msgrcv`, `shmget`, `shmat`, `semget`, `semop`, `socket` | Inter-process communication primitives. |
+| **Network / Socket** | `socket`, `bind`, `listen`, `accept`, `connect`, `send`, `recv`, `sendto`, `recvfrom`, `sendfile` | Network communication. |
+| **Signal** | `signal`, `sigaction`, `sigprocmask`, `sigsuspend`, `kill`, `raise`, `alarm` | Signal delivery and handling. |
+| **Device / I/O** | `ioctl`, `fcntl`, `read`, `write`, `select`, `poll`, `epoll_create`, `epoll_ctl`, `epoll_wait` | I/O control and multiplexing. |
+| **Time** | `time`, `gettimeofday`, `clock_gettime`, `nanosleep`, `setitimer` | Get/set system time and timers. |
+| **User / Group** | `getuid`, `setuid`, `getgid`, `setgid`, `getgroups`, `setgroups` | User identity management. |
+| **File Permissions** | `chmod`, `chown`, `umask`, `access` | Change or check file permissions. |
+| **System Info** | `uname`, `sysinfo`, `getrlimit`, `setrlimit`, `times` | Query system information and resource limits. |
+
+### Important Syscalls Deep Dive
+
+#### `mmap` — Memory-Mapped Files
+
+`mmap()` maps a file (or anonymous memory) directly into a process's virtual address space. Instead of using `read()`/`write()` (which require copying data through a kernel buffer), the process accesses file data via direct pointer dereference.
+
+```c
+void *addr = mmap(NULL, file_size, PROT_READ, MAP_SHARED, fd, 0);
+// Now access file like an array:
+char first_byte = ((char*)addr)[0];  // No syscall needed — page fault loads from disk
+```
+
+**Why databases use mmap:** SQLite uses mmap for database file access. However, large databases avoid mmap because the OS's page eviction is not database-aware — the kernel may evict hot database pages from cache unpredictably.
+
+#### `epoll` — Scalable I/O Multiplexing
+
+```c
+int epfd = epoll_create1(0);               // Create epoll instance
+epoll_ctl(epfd, EPOLL_CTL_ADD, sockfd, &ev); // Register socket
+int n = epoll_wait(epfd, events, MAX, -1); // Block until any socket is ready
+```
+
+**Why epoll > select/poll:** `select()` and `poll()` pass the entire FD list to the kernel on every call (O(N) per call). `epoll` maintains a persistent kernel data structure and returns **only ready FDs** — O(1) regardless of total registered FDs. This is why Nginx can handle 100K+ concurrent connections in a single thread.
+
+### vDSO — Bypassing the Kernel for Common Syscalls
+
+The **vDSO (Virtual Dynamic Shared Object)** is a small kernel-provided shared library automatically mapped into every process's address space. It allows certain frequently called syscalls to execute **entirely in user space**, avoiding the overhead of the full Ring 3 → Ring 0 → Ring 3 transition.
+
+```mermaid
+flowchart LR
+    App["User App"] -->|"Calls gettimeofday()"| GLibC["glibc Wrapper"]
+    GLibC -->|"Checks if vDSO available"| VDSO["vDSO (mapped in user space)"]
+    VDSO -->|"Reads from kernel-shared page\n(no mode transition!)"| Return["Returns result directly"]
+    VDSO -->|"Falls back if unavailable"| Kernel["SYSCALL → Kernel"]
+```
+
+**Syscalls offloaded to vDSO:** `gettimeofday()`, `clock_gettime()`, `time()`, `getcpu()`.
+
+**Why possible:** The kernel maintains a shared read-only memory page (vsyscall page) containing live time data updated by the kernel. The vDSO code reads this page directly without switching rings.
+
+**Performance impact:** `gettimeofday()` via vDSO takes ~4ns vs ~100ns via full syscall — a **25× speedup** for high-frequency time queries (critical for trading systems, metrics collectors, and network timestamping).
+
+---
+
+## Section C: DMA — Direct Memory Access {#dma}
+
+### The Problem DMA Solves
+
+Without DMA, every byte transferred from a storage device or network card requires the **CPU to orchestrate each transfer**:
+1. CPU tells device controller to read next byte.
+2. CPU reads byte from data register.
+3. CPU writes byte to target memory address.
+4. Repeat for every byte.
+
+For a 1MB disk read: this consumes 1,048,576 CPU read+write cycles — completely blocking the CPU for the entire duration.
+
+### DMA Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant CPU
+    participant DMAController as DMA Controller
+    participant Device as Disk / NIC
+    participant RAM
+
+    CPU->>DMAController: Setup: Source=Device, Dest=RAM[addr], Count=N bytes
+    CPU->>DMAController: Start transfer (then CPU is free!)
+    Note over CPU: CPU executes OTHER processes while DMA works
+
+    DMAController->>Device: Request data blocks
+    Device->>DMAController: Send data blocks
+    DMAController->>RAM: Write directly to target RAM address
+    Note over DMAController,RAM: CPU is NOT involved in this transfer
+
+    DMAController->>CPU: Interrupt — transfer complete!
+    CPU->>CPU: Resumes handling the I/O completion
+```
+
+### DMA Types
+
+| Type | Description | Usage |
+| :--- | :--- | :--- |
+| **Standard DMA** | Uses system bus; CPU bus is temporarily locked during transfers (cycle stealing) | Legacy ISA devices |
+| **Bus Mastering DMA** | DMA controller takes full ownership of bus; true parallel operation | PCIe devices (NVMe, SATA AHCI) |
+| **Scatter-Gather DMA** | Single DMA operation transfers to/from non-contiguous memory regions | Modern network cards (zero-copy networking) |
+
+### Cache Coherency Problem with DMA
+
+DMA writes directly to physical RAM, **bypassing CPU caches**. If the CPU has cached a memory region that DMA is writing to, the CPU cache holds **stale data** — a cache coherency violation.
+
+**Solution:** The kernel marks DMA buffers as **non-cacheable** (using cache-coherent DMA mappings) or explicitly issues **cache flush/invalidation** instructions before and after DMA operations.
+
+---
+
+## Section D: Memory-Mapped I/O vs Port-Mapped I/O {#mmio}
+
+Device registers (the hardware interface points for controlling peripherals) can be accessed by the CPU in two architecturally distinct ways:
+
+| Feature | **Port-Mapped I/O (PMIO)** | **Memory-Mapped I/O (MMIO)** |
+| :--- | :--- | :--- |
+| **Address Space** | Separate I/O address space (distinct from RAM) | Part of the main memory address space |
+| **CPU Instructions** | Special `IN`/`OUT` instructions (x86-specific) | Standard `MOV` / `LDR` / `STR` memory instructions |
+| **Architecture Support** | x86 only | All modern architectures (ARM, RISC-V, x86) |
+| **Security** | OS controls I/O port access via IOPL in EFLAGS | OS controls via page table protection bits |
+| **Performance** | Slower (special instructions, no caching) | Faster (standard memory pipeline, write combining) |
+| **Addressable Devices** | Limited (16-bit I/O port space = 65536 ports) | Large (maps into 64-bit virtual address space) |
+| **Used For** | Legacy x86 devices (PIC 8259, PIT 8253, old PCI) | All modern peripherals (PCIe GPUs, NVMe, APIC) |
+| **Example** | `outb(0x3F8, 'A')` — write to serial port | `*((volatile uint32_t*)0xFED00000) = val` — write to APIC |
+
+**Modern Reality:** All modern systems use MMIO. Port-Mapped I/O persists only for backward-compatible legacy devices (like the x86 PIC interrupt controller at ports 0x20/0xA0).
+
+---
+
+## Section E: I/O Scheduling Algorithms {#io-sched}
+
+I/O schedulers determine the order in which kernel I/O requests to a storage device are dispatched. For HDDs, reordering requests to minimize seek distance dramatically improves throughput. For SSDs (which have no mechanical seek), ordering for latency fairness is more important.
+
+### I/O Scheduler Comparison
+
+| Scheduler | Full Name | Key Policy | Best For | Weakness |
+| :--- | :--- | :--- | :--- | :--- |
+| **NOOP** | No Operation | FIFO order, minimal processing | **SSDs / NVMe** (no seek cost) | Poor for HDDs (no seek optimization) |
+| **Deadline** | Deadline | Batches reads (500ms timeout) and writes (5s timeout); prevents starvation via expiry queues | **Databases on HDDs** (predictable latency) | Less throughput than CFQ for mixed workloads |
+| **CFQ** | Completely Fair Queuing | Time-sliced I/O bandwidth per process | **Desktop workloads** (fair interactive feel) | Deprecated in Linux 5.0+ |
+| **BFQ** | Budget Fair Queuing | Budget-based per-process I/O allocation; guarantees latency for interactive processes | **Desktop, laptops, multimedia** | Higher CPU overhead |
+| **mq-deadline** | Multi-Queue Deadline | Multi-queue version of Deadline for NVMe | **NVMe SSDs in data centers** | Default in many Linux distros |
+| **kyber** | Kyber | Targets latency rather than throughput; feedback-based | **Ultra-fast NVMe / NAND flash** | Less configurable |
+
+### Check Current I/O Scheduler
+
+```bash
+# View scheduler for a device
+cat /sys/block/sda/queue/scheduler
+# [mq-deadline] kyber bfq none
+
+# Change scheduler at runtime
+echo mq-deadline > /sys/block/sda/queue/scheduler
+
+# Permanently change via udev rule
+echo 'ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/scheduler}="deadline"' \
+    > /etc/udev/rules.d/60-scheduler.rules
+```
+
+### HDD vs SSD Scheduling Strategy
+
+```mermaid
+flowchart TD
+    StorageType{"Storage Type?"}
+    StorageType -->|"HDD (mechanical)"| HDD["Use Deadline or BFQ<br>Minimize seek distance<br>Sort requests by sector"]
+    StorageType -->|"SSD / NVMe"| SSD["Use NOOP or mq-deadline<br>No seek cost<br>Focus on queue depth & latency"]
+    HDD --> HDD_Why["HDD seek = 5-15ms<br>Random access ruins throughput<br>Reordering essential"]
+    SSD --> SSD_Why["NVMe latency = ~100 microseconds<br>Parallel queues (32 queues × 64 deep)<br>Ordering not needed"]
+```
+
+---
+
+## Section F: FAANG-Level Interview Q&A {#faang-qa}
+
+#### Q1. What is Meltdown? How was it fixed? What was the performance cost?
+
+**Answer:**
+
+**Meltdown** (CVE-2017-5754) is a hardware vulnerability in Intel CPUs discovered in 2017. It exploits CPU speculative execution to allow a Ring 3 user process to read kernel memory that should be inaccessible.
+
+**How it works:**
+1.  The CPU speculatively executes a load instruction for a kernel address (even though it will eventually cause a Page Fault).
+2.  During speculative execution, the kernel memory is loaded into CPU cache.
+3.  Before the Page Fault fires and the CPU rolls back the speculation, the attacker uses a **cache timing side channel** (Flush+Reload) to determine which cache line was populated — revealing the kernel memory byte value.
+
+**Fix — KPTI (Kernel Page Table Isolation):**
+The kernel now maintains **two separate page table sets** per process:
+- A **user-space page table** (minimal kernel mappings — only enough to handle mode transitions).
+- A **kernel-space page table** (full mappings used while in Ring 0).
+
+When switching from user to kernel mode, the page table is swapped, preventing speculative loads from reaching kernel mappings.
+
+**Performance cost:** KPTI causes a **5–30% performance regression** on syscall-heavy workloads (databases, web servers). The cost is lower on CPUs with PCID (Process Context Identifier) support, which avoids full TLB flushes during page table switches.
+
+---
+
+#### Q2. What is the OOM Killer? How does it select its victim?
+
+**Answer:**
+The **OOM (Out-Of-Memory) Killer** is a Linux kernel mechanism activated when the system has exhausted all available physical RAM and swap space. Rather than causing a kernel panic, the kernel selects a process to kill to reclaim memory.
+
+**Selection Algorithm:**
+The kernel computes an `oom_score` for every process based on:
+- Physical memory consumed (larger = higher score).
+- Child processes' memory (parent responsible for children).
+- Length of time running (newer processes prioritized).
+- Process priority (nice value).
+
+The process with the **highest `oom_score`** is selected as the victim and sent `SIGKILL`.
+
+```bash
+# View OOM scores
+cat /proc/1234/oom_score
+
+# Protect critical processes from OOM Killer
+echo -1000 > /proc/$(pgrep sshd)/oom_score_adj
+
+# Monitor OOM events
+dmesg | grep -i "killed process"
+journalctl -k | grep oom
+```
+
+**Production implication:** Database processes (PostgreSQL, MySQL) should have `oom_score_adj = -900` to ensure the OOM Killer targets application worker processes before the database itself.
+
+---
+
+#### Q3. How does O_DIRECT work, and why do databases use it instead of standard file I/O?
+
+**Answer:**
+
+**Standard I/O path:**
+```
+App write() → Kernel page cache (RAM buffer) → Kernel flusher thread → Disk
+App read()  ← Kernel page cache (cache hit)  ← (no disk read if cached)
+```
+
+**O_DIRECT path:**
+```
+App write() → Direct DMA transfer → Disk (bypasses page cache entirely)
+App read()  → Direct DMA transfer ← Disk (no kernel buffering)
+```
+
+**Why databases (PostgreSQL, MySQL InnoDB) use O_DIRECT:**
+1. **Avoid double buffering:** Databases maintain their own buffer pool in user space (shared memory). Without O_DIRECT, data is cached twice: once in the database's buffer pool AND once in the kernel page cache — wasting RAM.
+2. **Predictable write latency:** Standard writes are asynchronous (kernel decides when to flush). O_DIRECT writes are synchronous — the application knows data is on disk when `write()` returns.
+3. **Control over I/O scheduling:** The database can issue its own optimized I/O patterns (sequential pre-fetching, prioritizing certain table access) without the kernel's generic heuristics overriding them.
+
+**Constraint:** O_DIRECT requires **aligned memory buffers** (4KB alignment on modern systems) and **sector-aligned I/O sizes**. Violating alignment causes `EINVAL`.
+
+---
+
+#### Q4. Explain Huge Pages and why databases configure them.
+
+**Answer:**
+
+**Standard paging** uses 4KB pages. For a 512GB database buffer pool:
+- Number of page table entries needed = 512GB / 4KB = **134,217,728 entries**.
+- These entries must be translated on every memory access → enormous TLB pressure.
+- With a 1536-entry TLB, the effective TLB hit rate approaches 0% for a 512GB working set.
+
+**Huge Pages** use 2MB or 1GB page sizes:
+- 512GB / 2MB = **262,144 entries** (512× fewer TLB entries).
+- TLB coverage massively improved → more cache hits → faster memory access.
+
+```bash
+# View huge page availability
+cat /proc/meminfo | grep -i huge
+
+# Allocate huge pages
+echo 1024 > /proc/sys/vm/nr_hugepages  # Allocate 1024 × 2MB = 2GB
+
+# PostgreSQL huge_pages configuration
+echo "huge_pages = on" >> /etc/postgresql/14/main/postgresql.conf
+```
+
+**Transparent Huge Pages (THP):** Linux can automatically merge 4KB pages into 2MB pages without explicit configuration. However, THP can cause periodic latency spikes during compaction (when the kernel tries to assemble contiguous physical pages), so many databases disable THP:
+```bash
+echo never > /sys/kernel/mm/transparent_hugepage/enabled
+```
+
+---
+
+#### Q5. A service starts on boot but crashes after 5 seconds and loops. How do you diagnose it?
+
+**Answer:**
+
+```bash
+# Step 1: Check systemd unit status and recent logs
+systemctl status myservice.service
+
+# Step 2: Follow live journal for this service
+journalctl -fu myservice.service
+
+# Step 3: Check kernel messages for OOM kills or crashes
+dmesg -T | grep -i "myservice\|killed\|segfault"
+
+# Step 4: Check the binary dependencies
+ldd /usr/bin/myservice | grep "not found"
+
+# Step 5: Trace system calls to find the exact failure
+strace -f /usr/bin/myservice 2>&1 | tail -30
+# Look for the last syscall before exit_group()
+
+# Step 6: Check file/port conflicts
+ss -tulpn | grep 8080   # Is the port already in use?
+lsof /var/lock/myservice.pid  # Is a lock file held?
+
+# Step 7: Check resource limits
+cat /proc/$(pgrep myservice)/limits
+ulimit -a
+
+# Step 8: Review systemd restart policy
+cat /etc/systemd/system/myservice.service | grep Restart
+# Restart=on-failure with StartLimitBurst=5 might be causing the loop
+```
+
+---
+
+#### Q6. Explain the difference between a hard link and a bind mount.
+
+**Answer:**
+
+| Property | Hard Link | Bind Mount |
+| :--- | :--- | :--- |
+| **Scope** | Single filesystem only (same device) | Can cross filesystems |
+| **Works on directories** | No | Yes |
+| **Kernel mechanism** | Directory entry → same inode | Mounts a directory subtree at a new path in the VFS namespace |
+| **Namespace isolation** | No | Yes (per-namespace visibility) |
+| **Docker/Container use** | No | Yes — overlayfs and bind mounts enable container filesystems |
+| **Command** | `ln file link` | `mount --bind /src /dst` |
+
+Bind mounts are a critical mechanism for containers: Docker uses bind mounts to expose host directories inside containers and OverlayFS to layer container filesystem changes on top of the base image.
+
+---
+
+## Section G: Reinforcement — Rapid Fire & Checklist {#reinforcement}
+
+### 25-Question Rapid Fire Q&A
+
+1.  **Q:** What CPU register controls the active page table? **A:** `%cr3` on x86-64.
+2.  **Q:** What is the U/S bit in a page table entry? **A:** User/Supervisor bit — controls if Ring 3 can access the page.
+3.  **Q:** What does KPTI stand for and why was it needed? **A:** Kernel Page Table Isolation — defense against Meltdown CPU vulnerability.
+4.  **Q:** What is a vDSO? **A:** Virtual Dynamic Shared Object — maps kernel code into user space to avoid mode transitions for frequent syscalls.
+5.  **Q:** Which syscalls are accelerated by vDSO? **A:** `gettimeofday()`, `clock_gettime()`, `time()`, `getcpu()`.
+6.  **Q:** What is the first software to run when a PC powers on? **A:** UEFI/BIOS firmware (runs from flash ROM).
+7.  **Q:** What is the role of GRUB? **A:** Bootloader — loads the Linux kernel image (`vmlinuz`) and initial RAM disk (`initramfs`) into memory.
+8.  **Q:** What is initramfs? **A:** Temporary root filesystem in RAM containing drivers and tools needed to mount the real root filesystem.
+9.  **Q:** What is PID 1 in Linux? **A:** The first user-space process — `systemd` (or `init` on older systems). All processes are descendants of PID 1.
+10. **Q:** What happens when a process calls `exit()`? **A:** Kernel releases resources, process enters Zombie state, sends SIGCHLD to parent. Removed when parent calls `wait()`.
+11. **Q:** What is the difference between `fork()` and `clone()`? **A:** `fork()` creates a new process with a separate address space. `clone()` is the low-level primitive that can share resources (used to create threads).
+12. **Q:** What is Copy-on-Write in `fork()`? **A:** After `fork()`, parent and child share physical pages marked read-only. When either writes, the kernel creates a private copy of that page.
+13. **Q:** What is a Monolithic kernel? **A:** All OS services (scheduler, FS, drivers, network) run in Ring 0 as one binary. Example: Linux.
+14. **Q:** What is a Microkernel? **A:** Minimal Ring 0 kernel (IPC, scheduling, MM only); all other services run in user space. Example: QNX.
+15. **Q:** Why does Linux not use intermediate privilege rings (1 and 2)? **A:** To maintain portability with ARM/RISC-V (which have only 2 rings) and avoid inter-ring transition overhead.
+16. **Q:** What is DMA? **A:** Direct Memory Access — hardware mechanism allowing I/O devices to transfer data directly to/from RAM without CPU involvement.
+17. **Q:** What is the DMA cache coherency problem? **A:** DMA writes bypass CPU caches; cached CPU data may be stale. Fixed via non-cacheable DMA mappings or explicit cache flush.
+18. **Q:** What I/O scheduler should you use for NVMe SSDs? **A:** NOOP or mq-deadline (no seek optimization needed).
+19. **Q:** What I/O scheduler should you use for databases on HDDs? **A:** Deadline scheduler (minimizes seek + prevents read starvation).
+20. **Q:** What is O_DIRECT? **A:** Open flag that bypasses kernel page cache — I/O goes directly between user buffer and device via DMA.
+21. **Q:** What is Memory-Mapped I/O? **A:** Device registers mapped into the main memory address space, accessed via standard load/store instructions.
+22. **Q:** What is Port-Mapped I/O? **A:** Device registers in a separate I/O address space, accessed via special `IN`/`OUT` CPU instructions (x86 only).
+23. **Q:** What syscall does `malloc()` use internally? **A:** `brk()`/`sbrk()` for small allocations; `mmap(MAP_ANONYMOUS)` for large allocations.
+24. **Q:** Why does `epoll` scale better than `select`? **A:** `select` passes entire FD list on every call (O(N)); `epoll` maintains a persistent kernel set and returns only ready FDs (O(1)).
+25. **Q:** What is the OOM Killer? **A:** Linux kernel mechanism that kills the highest `oom_score` process when the system exhausts all RAM and swap.
+
+### Top 10 Interview Mistakes — Day 2
+
+1.  Saying the Shell is part of the kernel — the shell is a **user-space application**.
+2.  Not knowing that Ring 1 and Ring 2 are **unused by modern OSes** (Linux, Windows, macOS).
+3.  Saying Linux is a Microkernel — Linux is **Monolithic** (with loadable modules).
+4.  Not explaining the **vDSO** optimization when asked about `gettimeofday()` performance.
+5.  Forgetting that **Copy-on-Write** means `fork()` does NOT immediately copy all memory.
+6.  Not knowing that **DMA bypasses CPU caches**, creating potential cache coherency issues.
+7.  Confusing `mmap` (memory-mapped files in user space) with MMIO (device register access).
+8.  Not knowing that **O_DIRECT** requires aligned buffers (common interview trap).
+9.  Forgetting **KPTI** and its performance implications when discussing Meltdown.
+10. Not being able to explain why `epoll` is O(1) while `select` is O(N).
+
+### Day 2 Revision Checklist
+
+- [ ] I can draw the Ring 0 / Ring 3 boundary and explain the U/S page table bit.
+- [ ] I can trace a `write()` syscall from user space through the kernel to hardware.
+- [ ] I can name and distinguish Monolithic, Microkernel, Hybrid, and Exokernel with examples.
+- [ ] I can explain KPTI, why it was introduced, and its performance cost.
+- [ ] I can list the UEFI → GRUB → vmlinuz → initramfs → PID 1 boot chain.
+- [ ] I can explain DMA, its lifecycle, and the cache coherency problem it introduces.
+- [ ] I can compare MMIO vs Port-Mapped I/O and name which architectures support each.
+- [ ] I can explain what vDSO is and name the syscalls it optimizes.
+- [ ] I can recommend the right I/O scheduler for HDD vs SSD workloads.
+- [ ] I can explain OOM Killer, victim selection, and how to protect critical processes.
+
+### One-Page Day 2 Cheat Sheet
+
+| Topic | Key Fact |
+| :--- | :--- |
+| Ring 0 = | Kernel (full hardware access) |
+| Ring 3 = | User space (restricted, no hardware access) |
+| Mode transition trigger | `SYSCALL` instruction / hardware interrupt |
+| Syscall interface | Args in `rdi,rsi,rdx`; number in `rax`; `SYSCALL` → kernel handler |
+| vDSO | Maps kernel code into user space; `gettimeofday()` = ~4ns (no syscall) |
+| Monolithic kernel | All OS in Ring 0; fast; example = Linux |
+| Microkernel | Minimal Ring 0; services in user space; example = QNX |
+| Hybrid kernel | Both in Ring 0 + user space servers; example = Windows NT, macOS XNU |
+| KPTI | Separate page tables per process; fixes Meltdown; 5–30% perf cost |
+| Boot chain | UEFI → GRUB → vmlinuz → initramfs → PID 1 (systemd) → user space |
+| initramfs | Temporary RAM-based root FS to mount real root |
+| DMA | Device → RAM without CPU; bypasses caches |
+| MMIO | Device registers in main memory address space |
+| PMIO | Device registers in I/O address space; `IN`/`OUT` instructions; x86 only |
+| O_DIRECT | Bypasses page cache; databases use it to avoid double buffering |
+| Huge Pages | 2MB/1GB pages → fewer TLB entries → less TLB pressure |
+| epoll vs select | epoll = O(1); select = O(N) — epoll for high-concurrency servers |
+| OOM Killer | Kills highest `oom_score` process when RAM exhausted |
+| I/O scheduler (HDD) | Deadline or BFQ |
+| I/O scheduler (SSD/NVMe) | NOOP or mq-deadline |
