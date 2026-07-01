@@ -314,19 +314,19 @@ The transition occurs through three main entry points:
 ```mermaid
 flowchart TD
     subgraph UserSpace["User Space (CPL = 3)"]
-        App["Executing App Code\n(User Stack RSP)"]
+        App["Executing App Code<br>(User Stack RSP)"]
     end
 
     subgraph KernelSpace["Kernel Space (CPL = 0)"]
-        SyscallH["Kernel Entry Code\n- Pushes GPRs to Kernel Stack\n- Dispatches System Call"]
+        SyscallH["Kernel Entry Code<br>- Pushes GPRs to Kernel Stack<br>- Dispatches System Call"]
         KernelRun["Kernel Mode Execution"]
     end
 
     App -->|1. SYSCALL Instruction| HW_Elevate
     
     subgraph HW["Hardware Transition (Atomic)"]
-        HW_Elevate["2. Hardware Elevation:\n- Save RIP -> RCX, RFLAGS -> R11\n- Switch CPL 3 -> 0\n- Swap RSP_user -> RSP_kernel (via TSS)\n- Jump to IA32_LSTAR MSR"]
-        HW_Drop["4. Hardware Return:\n- Restore RIP from RCX, RFLAGS from R11\n- Drop CPL 0 -> 3\n- Swap RSP_kernel -> RSP_user"]
+        HW_Elevate["2. Hardware Elevation:<br>- Save RIP → RCX, RFLAGS → R11<br>- Switch CPL 3 → 0<br>- Swap RSP_user → RSP_kernel (via TSS)<br>- Jump to IA32_LSTAR MSR"]
+        HW_Drop["4. Hardware Return:<br>- Restore RIP from RCX, RFLAGS from R11<br>- Drop CPL 0 → 3<br>- Swap RSP_kernel → RSP_user"]
     end
 
     HW_Elevate --> SyscallH
@@ -690,11 +690,11 @@ To prevent security leaks, the OS isolates process memory. For processes to coop
 ```mermaid
 flowchart LR
     subgraph UserSpace["User Space"]
-        ProcessA["Process A\nVirtual Memory"]
-        ProcessB["Process B\nVirtual Memory"]
+        ProcessA["Process A<br>Virtual Memory"]
+        ProcessB["Process B<br>Virtual Memory"]
     end
     subgraph PhysicalRAM["Physical RAM"]
-        SharedPage["Shared Physical RAM Page\n(Fastest, Requires Locks)"]
+        SharedPage["Shared Physical RAM Page<br>(Fastest, Requires Locks)"]
     end
     ProcessA -->|Direct Read/Write| SharedPage
     ProcessB -->|Direct Read/Write| SharedPage
@@ -1223,7 +1223,7 @@ flowchart TD
         PPageTable2 -->|Points to| PhysicalPage2
         
         CPageTable2 -->|Points to| PhysicalPage1
-        CPageTable2 -->|Trigger write fault -> Copy| NewPhysicalPage2
+        CPageTable2 -->|Trigger write fault → Copy| NewPhysicalPage2
     end
 ```
 
@@ -1450,8 +1450,8 @@ flowchart TD
     AppA["Process A invokes kill - PID_B, SIGKILL"] --> KernelMode["Kernel Mode - Ring 0 Permission Check"]
     KernelMode --> WriteSet["Writes SIGKILL into Process B pending signal set"]
     WriteSet --> InterruptSleep["Interrupts Process B if sleeping"]
-    InterruptSleep --> B_Scheduled["When Process B is scheduled next:\nKernel checks B pending signals"]
-    B_Scheduled --> TerminateB["Detects SIGKILL:\nTerminates B, releases memory, marks B as zombie"]
+    InterruptSleep --> B_Scheduled["When Process B is scheduled next:<br>Kernel checks B pending signals"]
+    B_Scheduled --> TerminateB["Detects SIGKILL:<br>Terminates B, releases memory, marks B as zombie"]
 ```
 
 ### Real Life Analogy
@@ -1562,7 +1562,8 @@ flowchart TD
     subgraph ProgrammedIO["Programmed I/O Polling"]
         direction TB
         CPU_Poll["CPU"] -->|1. Write Command| Dev_Poll["Device Controller"]
-        CPU_Poll <-->|2. Loop Poll Status Register| Dev_Poll
+        CPU_Poll -->|2. Loop Poll Status Register| Dev_Poll
+        Dev_Poll --> CPU_Poll
         Dev_Poll -->|3. Copy Data Byte| CPU_Poll
     end
 
@@ -1790,8 +1791,8 @@ Let's trace:
 
 ```mermaid
 graph TD
-    PRoot["P_root"] -->|First Fork| PRoot_Left["P_root\nLeft = true"]
-    PRoot -->|First Fork| PChild1["P_child1\nLeft = 0 / false"]
+    PRoot["P_root"] -->|First Fork| PRoot_Left["P_root<br>Left = true"]
+    PRoot -->|First Fork| PChild1["P_child1<br>Left = 0 / false"]
     
     PRoot_Left -->|Runs Second Fork| PRoot_Final["P_root"]
     PRoot_Left -->|Runs Second Fork| PChild2["P_child2"]
