@@ -220,8 +220,8 @@ flowchart TD
     Dec1 -->|No| AccessAllowed["Access Allowed"]
     
     PrivilegeCheck --> Dec2{"CPL?"}
-    Dec2 -->|3 (User)| Trap["Trigger Hardware Trap (#PF)<br>Kernel terminates process"]
-    Dec2 -->|0 (Kernel)| AccessAllowed
+    Dec2 -->|3 - User| Trap["Trigger Hardware Trap (#PF)<br>Kernel terminates process"]
+    Dec2 -->|0 - Kernel| AccessAllowed
 ```
 The page table structures (Page Directory Entries, Page Table Entries) are themselves stored in kernel space. A user application cannot change its own page mappings because the register pointing to the base of the page table (the `CR3` register on x86) can only be written to using the `MOV CR3, reg` instruction, which is a privileged instruction that will throw a `#GP` fault if executed in Ring 3.
 
